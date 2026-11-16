@@ -1,0 +1,6 @@
+#!/bin/sh
+# Writes stdin to the file named by STUB_OUT
+case " $* " in *" --raw "*) ;; *) echo "sndfile: Format not recognised" >&2; exit 1;; esac
+[ "$STUB_MODE" = fail ] && { echo "boom" >&2; exit 1; }
+[ -n "$STUB_HANG" ] && exec sleep 30  # a long answer still playing
+cat > "$STUB_OUT"

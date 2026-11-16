@@ -1,0 +1,238 @@
+diff --git a/src/quickshell/guide/HumminTab.qml b/src/quickshell/guide/HumminTab.qml
+index c65b5f0..35c2204 100644
+--- a/src/quickshell/guide/HumminTab.qml
++++ b/src/quickshell/guide/HumminTab.qml
+@@ -17,37 +17,43 @@ GuideTab {
+         return null;
+     }
+ 
++    readonly property var assistantDefaults: ({ look: "popup", voice: "typing", wakeWord: true, model: "openrouter/z-ai/glm-5.3-flash" })
++    readonly property var looks: ["popup", "dropdown", "side"]
++    readonly property var voices: ["typing", "voice_in", "voice_in_out"]
++    property var assistantCfg: Object.assign({}, assistantDefaults, Config.getSetting("assistant", assistantDefaults) || {})
++    function setAssistant(key, value) {
++        let cur = JSON.parse(JSON.stringify(Config.getSetting("assistant", assistantDefaults) || assistantDefaults));
++        cur[key] = value;
++        Config.setSetting("assistant", cur);
++        assistantCfg = Object.assign({}, assistantDefaults, cur);
++    }
++
+     QsMenuOpener {
+         id: rootMenu
+         menu: humminTabRoot.trayItem ? humminTabRoot.trayItem.menu : null
+     }
+     readonly property var entries: rootMenu.children ? (rootMenu.children.values || []) : []
+ 
+-    // The menu: a summary line ("All servers stopped"), then per host (servers.json's hostOrder) a disabled
+-    // header entry and its models, each with Start/Stop/Restart children; a separator ends it before "Quit menubar".
++    // The menu: a summary line ("All servers stopped"), then one submenu per host (servers.json's hostOrder,
++    // labelled "Laptop  (2 running)") holding its models, each with Start/Stop/Restart children; then a separator
++    // and "Quit menubar" (hummin_menubar/app.py attach()).
+     readonly property string summary: (entries.length > 0 && !entries[0].hasChildren && entries[0].enabled) ? entries[0].text : ""
+-    readonly property var groups: {
+-        let out = [];
+-        for (let i = 0; i < entries.length; i++) {
+-            let e = entries[i];
+-            if (!e) continue;
+-            if (e.isSeparator) break;
+-            if (e.hasChildren) {
+-                if (out.length === 0) out.push({ host: "", servers: [] });
+-                out[out.length - 1].servers.push(e);
+-            } else if (!e.enabled) {
+-                out.push({ host: e.text, servers: [] });
+-            }
+-        }
+-        return out;
++    readonly property var hosts: entries.filter(e => e && !e.isSeparator && e.hasChildren)
++
++    // Host groups open and close like the Idle tab's actions (IdleTab.qml:13-19); closed until clicked
++    property var openHosts: ({})
++    function toggleHost(host) {
++        let map = Object.assign({}, humminTabRoot.openHosts);
++        map[host] = !map[host];
++        humminTabRoot.openHosts = map;
+     }
+ 
+     // "Bonsai 2 27B (ternary) :9996  ●": ● up, ◐ busy, ○ down, optionally " ·mode" before the dot and
+-    // "  starting..." after it (hummin_menubar/app.py render())
++    // "  starting..." after it (hummin_menubar/app.py render()); entries without a port (murmur link) have no ":port"
+     function parse(label) {
+-        let m = /^(.*?)\s+:(\d+)(?:\s+·\S+)?\s+([●◐○])/.exec(label || "");
++        let m = /^(.*?)(?:\s+:(\d+))?(?:\s+·\S+)?\s+([●◐○])/.exec(label || "");
+         if (!m) return { name: label || "", port: "", state: "down" };
+-        return { name: m[1], port: m[2], state: m[3] === "●" ? "up" : (m[3] === "◐" ? "busy" : "down") };
++        return { name: m[1], port: m[2] || "", state: m[3] === "●" ? "up" : (m[3] === "◐" ? "busy" : "down") };
+     }
+ 
+     function stateLabel(state) {
+@@ -61,7 +67,7 @@ GuideTab {
+     function hostIcon(host) {
+         if (host === "Laptop") return "󰌢";
+         if (host === "Mac") return "󰀵";
+-        if (host === "NAS") return "󰒋";
++        if (host.startsWith("NAS")) return "󰒋";
+         return "󰒍";
+     }
+ 
+@@ -84,6 +90,76 @@ GuideTab {
+             width: parent.width
+             spacing: rootObj.s(6)
+ 
++            SettingsBlob {
++                SettingsRow {
++                    rootObj: humminTabRoot.rootObj
++                    searchable: false
++                    icon: "󰚩"
++                    title: I18n.t("guide.hummin.assistant")
++                    titleBold: true
++                }
++                SettingsRow {
++                    rootObj: humminTabRoot.rootObj
++                    searchable: false
++                    icon: "󰖲"
++                    title: I18n.t("guide.hummin.look.title")
++                    description: I18n.t("guide.hummin.look.desc")
++                    Dropdown {
++                        implicitWidth: rootObj.s(170)
++                        implicitHeight: rootObj.s(32)
++                        fuzzySearch: false
++                        options: [I18n.t("guide.hummin.look_popup"), I18n.t("guide.hummin.look_dropdown"), I18n.t("guide.hummin.look_side")]
++                        currentIndex: Math.max(0, humminTabRoot.looks.indexOf(humminTabRoot.assistantCfg.look))
++                        onValueChanged: function(index, value) { humminTabRoot.setAssistant("look", humminTabRoot.looks[index]); }
++                    }
++                }
++                SettingsRow {
++                    rootObj: humminTabRoot.rootObj
++                    searchable: false
++                    icon: "󰍬"
++                    title: I18n.t("guide.hummin.voice.title")
++                    description: I18n.t("guide.hummin.voice.desc")
++                    Switch {
++                        implicitWidth: rootObj.s(300)
++                        implicitHeight: rootObj.s(32)
++                        options: [I18n.t("guide.hummin.voice_typing"), I18n.t("guide.hummin.voice_in"), I18n.t("guide.hummin.voice_in_out")]
++                        currentIndex: Math.max(0, humminTabRoot.voices.indexOf(humminTabRoot.assistantCfg.voice))
++                        onToggled: function(index) { humminTabRoot.setAssistant("voice", humminTabRoot.voices[index]); }
++                    }
++                }
++                SettingsRow {
++                    rootObj: humminTabRoot.rootObj
++                    searchable: false
++                    icon: "󰔊"
++                    title: I18n.t("guide.hummin.wake_word.title")
++                    description: I18n.t("guide.hummin.wake_word.desc")
++                    Toggle {
++                        checked: humminTabRoot.assistantCfg.wakeWord === true
++                        accentColor: ThemeBackend.mauve
++                        baseColor: ThemeBackend.surface1
++                        handleColor: ThemeBackend.crust
++                        handleOffColor: ThemeBackend.text
++                        onToggled: function(c) { humminTabRoot.setAssistant("wakeWord", c); }
++                    }
++                }
++                SettingsRow {
++                    id: modelRow
++                    rootObj: humminTabRoot.rootObj
++                    searchable: false
++                    icon: "󰧑"
++                    title: I18n.t("guide.hummin.model.title")
++                    description: I18n.t("guide.hummin.model.desc")
++                    Dropdown {
++                        implicitWidth: rootObj.s(260)
++                        implicitHeight: rootObj.s(32)
++                        fuzzySearch: true
++                        options: AssistantState.models.map(m => String(m.name).replace(/</g, "‹").replace(/>/g, "›"))
++                        currentIndex: AssistantState.models.findIndex(m => m.id === humminTabRoot.assistantCfg.model)
++                        onValueChanged: function(index, value) { if (AssistantState.models[index]) humminTabRoot.setAssistant("model", AssistantState.models[index].id); }
++                    }
++                }
++            }
++
+             SettingsBlob {
+                 visible: !humminTabRoot.trayItem
+                 SettingsRow {
+@@ -96,27 +172,66 @@ GuideTab {
+             }
+ 
+             Repeater {
+-                model: humminTabRoot.groups
++                model: humminTabRoot.hosts
+ 
+                 delegate: SettingsBlob {
+                     id: hostBlob
+-                    property var groupData: modelData
+-                    readonly property int running: groupData.servers.filter(e => humminTabRoot.parse(e.text).state === "up").length
++                    property var hostEntry: modelData
++                    readonly property string host: (hostEntry ? hostEntry.text : "").replace(/\s+\(\d+ running\)$/, "")
++                    QsMenuOpener {
++                        id: hostMenu
++                        menu: hostBlob.hostEntry
++                    }
++                    readonly property var servers: hostMenu.children ? (hostMenu.children.values || []) : []
++                    readonly property int running: servers.filter(e => e && humminTabRoot.parse(e.text).state === "up").length
++                    readonly property bool open: !!humminTabRoot.openHosts[host]
+                     Layout.topMargin: index > 0 ? rootObj.s(6) : 0
+ 
+                     SettingsRow {
+                         rootObj: humminTabRoot.rootObj
+                         searchable: false
+-                        icon: humminTabRoot.hostIcon(hostBlob.groupData.host)
++                        icon: humminTabRoot.hostIcon(hostBlob.host)
+                         iconTextColor: ThemeBackend.mauve
+-                        title: hostBlob.groupData.host
++                        title: hostBlob.host
+                         titleBold: true
+-                        description: hostBlob.running + " of " + hostBlob.groupData.servers.length + " running"
++                        description: hostBlob.running + " of " + hostBlob.servers.length + " running"
++
++                        // IdleTab.qml's expand chevron
++                        FlipIcon {
++                            Layout.alignment: Qt.AlignVCenter
++                            size: rootObj.s(28)
++                            cornerRadius: rootObj.s(8)
++                            accentColor: ThemeBackend.surface0
++                            iconColor: isHoveredOrHighlighted ? ThemeBackend.text : ThemeBackend.overlay2
++                            autoToggle: false
++                            flipped: hostBlob.open
++                            onClicked: humminTabRoot.toggleHost(hostBlob.host)
++                        }
+                     }
+ 
+-                    Repeater {
+-                        model: hostBlob.groupData.servers
+-                        delegate: ServerRow { entry: modelData }
++                    // IdleTab.qml's expandable body: height and fade follow openProgress
++                    Item {
++                        Layout.fillWidth: true
++                        clip: true
++                        visible: hostBlob.open || implicitHeight > 0
++                        opacity: hostBlob.open ? 1.0 : 0.0
++                        property real openProgress: hostBlob.open ? 1 : 0
++                        implicitHeight: serversCol.implicitHeight * openProgress
++                        Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
++                        Behavior on openProgress { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
++
++                        ColumnLayout {
++                            id: serversCol
++                            anchors.left: parent.left
++                            anchors.right: parent.right
++                            anchors.top: parent.top
++                            spacing: 0
++
++                            Repeater {
++                                model: hostBlob.servers
++                                delegate: ServerRow { entry: modelData }
++                            }
++                        }
+                     }
+                 }
+             }
+@@ -134,7 +249,7 @@ GuideTab {
+         iconFontSize: 10
+         iconTextColor: humminTabRoot.stateColor(row.info.state)
+         title: row.info.name
+-        description: ":" + row.info.port + "  ·  " + humminTabRoot.stateLabel(row.info.state)
++        description: (row.info.port ? ":" + row.info.port + "  ·  " : "") + humminTabRoot.stateLabel(row.info.state)
+ 
+         QsMenuOpener {
+             id: actionsMenu

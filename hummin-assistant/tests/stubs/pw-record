@@ -1,0 +1,7 @@
+#!/bin/sh
+# STUB_ARGS=file -> write argv there; STUB_OUT=file -> cat it (raw PCM) and exit; otherwise run until killed
+# STUB_IGNORE_INT=1 -> ignore SIGINT, like a pw-record stuck on a wedged PipeWire
+[ -n "$STUB_ARGS" ] && printf '%s\n' "$@" > "$STUB_ARGS"
+[ -n "$STUB_OUT" ] && [ -z "$STUB_HANG" ] && { cat "$STUB_OUT"; exit 0; }
+[ -n "$STUB_IGNORE_INT" ] && trap '' INT
+exec sleep 30

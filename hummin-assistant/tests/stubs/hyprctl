@@ -1,0 +1,4 @@
+#!/bin/sh
+# Appends argv (one line per call) to STUB_HYPR (if set)
+[ -n "$STUB_HYPR" ] && printf '%s\n' "$*" >> "$STUB_HYPR"
+exit 0

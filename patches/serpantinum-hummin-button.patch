@@ -1,0 +1,319 @@
+diff -ruN a/src/assets/languages/en.json b/src/assets/languages/en.json
+--- a/src/assets/languages/en.json	2026-11-09 03:16:08.007564051 +0100
++++ b/src/assets/languages/en.json	2026-11-09 03:16:08.654218308 +0100
+@@ -32,6 +32,7 @@
+       "theme": "Theme",
+       "notifications": "Notifications",
+       "idle": "Idle",
++      "hummin": "Hummin",
+       "wellbeing": "Wellbeing",
+       "tutorial": "Tutorial",
+       "update": "Update",
+diff -ruN a/src/quickshell/bar/faces/left/LeftFace.qml b/src/quickshell/bar/faces/left/LeftFace.qml
+--- a/src/quickshell/bar/faces/left/LeftFace.qml	2026-11-09 03:16:08.253249902 +0100
++++ b/src/quickshell/bar/faces/left/LeftFace.qml	2026-11-09 03:20:27.783116987 +0100
+@@ -1,6 +1,8 @@
+ import QtQuick
++import QtQuick.Effects
+ import QtQuick.Layouts
+ import Quickshell
++import Quickshell.Services.SystemTray
+ import "../../../reusables"
+ import "../../../"
+ import "../../"
+@@ -138,7 +140,8 @@
+         Config.setSetting("idle", idleObj);
+     }
+ 
+-    readonly property int menuCount: menuItems ? menuItems.length : 0
++    // + the Hummin bird (humminBtn below), which is not one of menuItems
++    readonly property int menuCount: (menuItems ? menuItems.length : 0) + (humminBtn.shown ? 1 : 0)
+     readonly property real buttonsLength: menuCount > 0
+         ? menuCount * (isVertical ? s(isCompact ? 28 : 30) : s(isCompact ? 30 : 32)) + (menuCount - 1) * s(isCompact ? 2 : 4)
+         : 0
+@@ -150,6 +153,8 @@
+     component MenuButton: Item {
+         id: menuBtn
+         property string glyph: ""
++        // An image instead of a glyph, tinted like the glyphs
++        property string imageSource: ""
+         property bool active: false
+         property color activeColor: ThemeBackend.peach
+         property int glyphYOffset: 0
+@@ -166,6 +171,7 @@
+         Behavior on opacity { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
+ 
+         IconButton {
++            id: menuIconBtn
+             anchors.fill: parent
+             visible: !root.iconOnly
+             cornerRadius: Math.max(0, ThemeBackend.borderRadius - root.s(2))
+@@ -199,6 +205,26 @@
+             cursorShape: Qt.PointingHandCursor
+             onClicked: menuBtn.clicked()
+         }
++
++        Image {
++            id: menuImage
++            anchors.centerIn: parent
++            width: root.s(root.isCompact ? 15 : 16)
++            height: width
++            sourceSize: Qt.size(width, height)
++            source: menuBtn.imageSource
++            fillMode: Image.PreserveAspectFit
++            visible: false
++        }
++
++        MultiEffect {
++            anchors.fill: menuImage
++            visible: menuBtn.imageSource !== ""
++            source: menuImage
++            brightness: 1.0
++            colorization: 1.0
++            colorizationColor: (menuIconBtn.isHoveredOrHighlighted || iconMouse.containsMouse) ? ThemeBackend.text : (root.isCompact ? ThemeBackend.subtext0 : ThemeBackend.overlay2)
++        }
+     }
+ 
+     AxisFlow {
+@@ -234,5 +260,19 @@
+                 }
+             }
+         }
++
++        // hummin-menubar's tray item, as a button here that opens its Settings page (guide/HumminTab.qml); TrayFace leaves it out
++        MenuButton {
++            id: humminBtn
++            readonly property var trayItem: {
++                let arr = SystemTray.items.values || [];
++                for (let i = 0; i < arr.length; i++) if (arr[i] && arr[i].id === "hummin-menubar") return arr[i];
++                return null;
++            }
++            readonly property bool shown: trayItem !== null
++            visible: shown
++            imageSource: trayItem ? trayItem.icon : ""
++            onClicked: if (!root.isPreview && trayItem) Quickshell.execDetached(["bash", "-c", Caching.serpantinumDir + "/scripts/settings.sh open hummin"])
++        }
+     }
+ }
+diff -ruN a/src/quickshell/bar/faces/tray/TrayFace.qml b/src/quickshell/bar/faces/tray/TrayFace.qml
+--- a/src/quickshell/bar/faces/tray/TrayFace.qml	2026-11-09 03:16:08.253799550 +0100
++++ b/src/quickshell/bar/faces/tray/TrayFace.qml	2026-11-09 03:16:08.654862666 +0100
+@@ -114,7 +114,8 @@
+ 
+         Repeater {
+             id: trayRepeater
+-            model: (!module || module.moduleActive) ? SystemTray.items : null
++            // hummin-menubar has its own button in LeftFace
++            model: (!module || module.moduleActive) ? SystemTray.items.values.filter(it => it && it.id !== "hummin-menubar") : null
+ 
+             onCountChanged: {
+                 if (count === 0) {
+diff -ruN a/src/quickshell/guide/GuidePopup.qml b/src/quickshell/guide/GuidePopup.qml
+--- a/src/quickshell/guide/GuidePopup.qml	2026-11-09 03:16:08.255585099 +0100
++++ b/src/quickshell/guide/GuidePopup.qml	2026-11-09 03:16:08.655050006 +0100
+@@ -538,6 +538,7 @@
+         { id: "Screenshot", key: "screenshot", name: "Screenshot", icon: "󰹑", file: "screenshot/ScreenshotTab.qml" },
+         { id: "Wellbeing", key: "wellbeing", name: "Wellbeing", icon: "󰄉", separatorBefore: true, file: "wellbeing/DigitalWellbeingTab.qml" },
+         { id: "Idle", key: "idle", name: "Idle", icon: "󰒲", file: "IdleTab.qml" },
++        { id: "Hummin", key: "hummin", name: "Hummin", icon: "󱗆", separatorBefore: true, file: "HumminTab.qml" },
+         { id: "About", key: "about", name: "About", icon: "󰋽", separatorBefore: true, file: "AboutTab.qml" }
+     ]
+ 
+diff -ruN a/src/quickshell/guide/HumminTab.qml b/src/quickshell/guide/HumminTab.qml
+--- a/src/quickshell/guide/HumminTab.qml	1970-01-01 01:00:00.000000000 +0100
++++ b/src/quickshell/guide/HumminTab.qml	2026-11-09 03:16:08.655208572 +0100
+@@ -0,0 +1,194 @@
++import QtQuick
++import QtQuick.Layouts
++import QtQuick.Controls
++import Quickshell
++import Quickshell.Services.SystemTray
++import "../"
++import "../reusables"
++
++// hummin-menubar's tray menu as a Settings page: a card per host, a row per model with Start, Stop and
++// Restart. Hummin stays in charge: every control triggers the matching entry of its menu.
++GuideTab {
++    id: humminTabRoot
++
++    readonly property var trayItem: {
++        let arr = SystemTray.items.values || [];
++        for (let i = 0; i < arr.length; i++) if (arr[i] && arr[i].id === "hummin-menubar") return arr[i];
++        return null;
++    }
++
++    QsMenuOpener {
++        id: rootMenu
++        menu: humminTabRoot.trayItem ? humminTabRoot.trayItem.menu : null
++    }
++    readonly property var entries: rootMenu.children ? (rootMenu.children.values || []) : []
++
++    // The menu: a summary line ("All servers stopped"), then per host (servers.json's hostOrder) a disabled
++    // header entry and its models, each with Start/Stop/Restart children; a separator ends it before "Quit menubar".
++    readonly property string summary: (entries.length > 0 && !entries[0].hasChildren && entries[0].enabled) ? entries[0].text : ""
++    readonly property var groups: {
++        let out = [];
++        for (let i = 0; i < entries.length; i++) {
++            let e = entries[i];
++            if (!e) continue;
++            if (e.isSeparator) break;
++            if (e.hasChildren) {
++                if (out.length === 0) out.push({ host: "", servers: [] });
++                out[out.length - 1].servers.push(e);
++            } else if (!e.enabled) {
++                out.push({ host: e.text, servers: [] });
++            }
++        }
++        return out;
++    }
++
++    // "Bonsai 2 27B (ternary) :9996  ●": ● up, ◐ busy, ○ down, optionally " ·mode" before the dot and
++    // "  starting..." after it (hummin_menubar/app.py render())
++    function parse(label) {
++        let m = /^(.*?)\s+:(\d+)(?:\s+·\S+)?\s+([●◐○])/.exec(label || "");
++        if (!m) return { name: label || "", port: "", state: "down" };
++        return { name: m[1], port: m[2], state: m[3] === "●" ? "up" : (m[3] === "◐" ? "busy" : "down") };
++    }
++
++    function stateLabel(state) {
++        return state === "up" ? "Running" : (state === "busy" ? "Working" : "Stopped");
++    }
++
++    function stateColor(state) {
++        return state === "up" ? ThemeBackend.green : (state === "busy" ? ThemeBackend.yellow : ThemeBackend.overlay0);
++    }
++
++    function hostIcon(host) {
++        if (host === "Laptop") return "󰌢";
++        if (host === "Mac") return "󰀵";
++        if (host === "NAS") return "󰒋";
++        return "󰒍";
++    }
++
++    function actionIcon(text) {
++        if (text === "Start") return "󰐊";
++        if (text === "Stop") return "󰓛";
++        if (text === "Restart") return "󰑐";
++        return "";
++    }
++
++    Flickable {
++        anchors.fill: parent
++        anchors.margins: rootObj.s(8)
++        contentHeight: settingsCol.implicitHeight
++        clip: true
++        boundsBehavior: Flickable.StopAtBounds
++
++        ColumnLayout {
++            id: settingsCol
++            width: parent.width
++            spacing: rootObj.s(6)
++
++            SettingsBlob {
++                visible: !humminTabRoot.trayItem
++                SettingsRow {
++                    rootObj: humminTabRoot.rootObj
++                    searchable: false
++                    icon: "󰀦"
++                    title: "hummin-menubar isn't running"
++                    description: "systemctl --user restart hummin-menubar"
++                }
++            }
++
++            Repeater {
++                model: humminTabRoot.groups
++
++                delegate: SettingsBlob {
++                    id: hostBlob
++                    property var groupData: modelData
++                    readonly property int running: groupData.servers.filter(e => humminTabRoot.parse(e.text).state === "up").length
++                    Layout.topMargin: index > 0 ? rootObj.s(6) : 0
++
++                    SettingsRow {
++                        rootObj: humminTabRoot.rootObj
++                        searchable: false
++                        icon: humminTabRoot.hostIcon(hostBlob.groupData.host)
++                        iconTextColor: ThemeBackend.mauve
++                        title: hostBlob.groupData.host
++                        titleBold: true
++                        description: hostBlob.running + " of " + hostBlob.groupData.servers.length + " running"
++                    }
++
++                    Repeater {
++                        model: hostBlob.groupData.servers
++                        delegate: ServerRow { entry: modelData }
++                    }
++                }
++            }
++        }
++    }
++
++    component ServerRow: SettingsRow {
++        id: row
++        property var entry: null
++        readonly property var info: humminTabRoot.parse(entry ? entry.text : "")
++
++        rootObj: humminTabRoot.rootObj
++        searchable: false
++        icon: "󰝥"
++        iconFontSize: 10
++        iconTextColor: humminTabRoot.stateColor(row.info.state)
++        title: row.info.name
++        description: ":" + row.info.port + "  ·  " + humminTabRoot.stateLabel(row.info.state)
++
++        QsMenuOpener {
++            id: actionsMenu
++            menu: row.entry
++        }
++        readonly property var actions: actionsMenu.children ? (actionsMenu.children.values || []) : []
++
++        // Token Proxy's "Mode": its children are the choices, the checked one current
++        Repeater {
++            model: row.actions.filter(a => a && a.hasChildren)
++            delegate: Item {
++                id: choice
++                property var choiceEntry: modelData
++                implicitWidth: rootObj.s(110)
++                implicitHeight: rootObj.s(32)
++
++                QsMenuOpener {
++                    id: choiceMenu
++                    menu: choice.choiceEntry
++                }
++                readonly property var options: choiceMenu.children ? (choiceMenu.children.values || []) : []
++
++                Dropdown {
++                    anchors.fill: parent
++                    options: choice.options.map(o => choice.choiceEntry.text + ": " + o.text)
++                    currentIndex: Math.max(0, choice.options.findIndex(o => o.checkState === Qt.Checked))
++                    accentColor: ThemeBackend.mauve
++                    baseColor: ThemeBackend.surface0
++                    hoverColor: ThemeBackend.surface1
++                    dropdownColor: ThemeBackend.surface0
++                    borderColor: Qt.alpha(ThemeBackend.surface2, 0.6)
++                    textColor: ThemeBackend.text
++                    activeTextColor: ThemeBackend.crust
++                    fontPixelSize: rootObj.s(11)
++                    onValueChanged: function(index, value) { if (choice.options[index]) choice.options[index].triggered(); }
++                }
++            }
++        }
++
++        Repeater {
++            model: row.actions.filter(a => a && !a.isSeparator && !a.hasChildren)
++            delegate: ClickButton {
++                implicitWidth: rootObj.s(96)
++                implicitHeight: rootObj.s(32)
++                buttonText: modelData.text
++                buttonIcon: humminTabRoot.actionIcon(modelData.text)
++                textFontSize: rootObj.s(11)
++                cornerRadius: ThemeBackend.borderRadius
++                enabled: modelData.enabled
++                opacity: enabled ? 1 : 0.35
++                accentColor: ThemeBackend.surface0
++                textColor: ThemeBackend.text
++                onClicked: modelData.triggered()
++            }
++        }
++    }
++}

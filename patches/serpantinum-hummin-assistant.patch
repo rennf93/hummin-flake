@@ -1,0 +1,772 @@
+diff --git a/src/assets/languages/en.json b/src/assets/languages/en.json
+index adcff08..2c502ab 100644
+--- a/src/assets/languages/en.json
++++ b/src/assets/languages/en.json
+@@ -121,6 +121,19 @@
+       "test": "Test notification",
+       "test_desc": "This is a test notification"
+     },
++    "hummin": {
++      "assistant": "Assistant",
++      "look": { "title": "Look", "desc": "Where the assistant appears when you tap it" },
++      "look_popup": "Popup",
++      "look_dropdown": "Drop-down terminal",
++      "look_side": "Side panel",
++      "voice": { "title": "Voice", "desc": "How you talk to it and whether it answers aloud" },
++      "voice_typing": "Typing",
++      "voice_in": "Voice in",
++      "voice_in_out": "Voice in & out",
++      "wake_word": { "title": "Wake word", "desc": "Start listening when you say it" },
++      "model": { "title": "Model", "desc": "The model that answers" }
++    },
+     "idle": {
+       "enabled": {
+         "title": "Enable idle system",
+diff --git a/src/quickshell/Shell.qml b/src/quickshell/Shell.qml
+index d232f8c..7e00050 100644
+--- a/src/quickshell/Shell.qml
++++ b/src/quickshell/Shell.qml
+@@ -51,6 +51,7 @@ ShellRoot {
+     LockRedactor {}
+ 
+     Launcher {}
++    Assistant {}
+     Clipboard {}    
+     Dashboard {}
+ 
+diff --git a/src/quickshell/assistant/Assistant.qml b/src/quickshell/assistant/Assistant.qml
+new file mode 100644
+index 0000000..498b122
+--- /dev/null
++++ b/src/quickshell/assistant/Assistant.qml
+@@ -0,0 +1,7 @@
++import Quickshell
++
++// The popup and side panel read AssistantState, which connects on first use
++Scope {
++    AssistantPopup {}
++    AssistantSidePanel {}
++}
+diff --git a/src/quickshell/assistant/AssistantChat.qml b/src/quickshell/assistant/AssistantChat.qml
+new file mode 100644
+index 0000000..4c2bfa9
+--- /dev/null
++++ b/src/quickshell/assistant/AssistantChat.qml
+@@ -0,0 +1,375 @@
++import QtQuick
++import QtQuick.Layouts
++import Quickshell
++import Quickshell.Wayland
++import "../"
++import "../reusables"
++
++// The conversation UI shared by the popup (input on top) and the side panel (input at the bottom).
++Item {
++    id: root
++
++    property bool side: false
++    property real maxListHeight: 100000
++    property bool screenshotNext: false
++    readonly property string voiceMode: Config.getSetting("assistant.voice", "typing")
++    readonly property string hint: "Enter send · Ctrl+S " + (root.screenshotNext ? "screenshot ON" : "add screenshot") + " · Esc close · hold Super+Space to talk"
++    signal closeRequested()
++
++    implicitHeight: col.implicitHeight
++
++    function s(val) { return Math.round(val * Scaler.baseScale); }
++    function f(px) { return root.s(px + 2); } // text sizes: 2 px over serpantinum's defaults, easier to read
++    function focusInput() { (side ? bottomInput : topInput).item.field.forceActiveFocus(); }
++
++    function sendPrompt(text, input) {
++        const t = text.trim();
++        if (t === "") return;
++        AssistantState.send({ cmd: "prompt", text: t, screenshot: root.screenshotNext, voice: false });
++        root.screenshotNext = false;
++        input.clear();
++    }
++
++    Shortcut { sequence: "Escape"; onActivated: root.closeRequested() }
++    Shortcut { sequence: "Ctrl+S"; onActivated: root.screenshotNext = !root.screenshotNext }
++
++    Component {
++        id: inputRow
++        RowLayout {
++            property alias field: input
++            spacing: root.s(8)
++            // Launcher.qml:1346 search-field look
++            Input {
++                id: input
++                Layout.fillWidth: true
++                implicitHeight: root.s(36)
++                baseColor: ThemeBackend.surface0
++                bgOpacity: ThemeBackend.glassActive ? 0.0 : 1.0
++                accentColor: ThemeBackend.mauve
++                textColor: ThemeBackend.text
++                subTextColor: ThemeBackend.subtext0
++                borderColor: Qt.alpha(ThemeBackend.surface2, 0.6)
++                cornerRadius: ThemeBackend.borderRadius
++                fontPixelSize: root.f(12)
++                charSpacing: 1
++                leadingIcon: "󱗆"
++                isBusy: AssistantState.busy
++                showClearButton: true
++                placeholderText: "Ask anything…"
++                onAccepted: finalText => root.sendPrompt(finalText, input)
++            }
++            ClickButton {
++                id: mic
++                buttonIcon: "󰍬"
++                implicitWidth: root.s(36)
++                implicitHeight: root.s(36)
++                cornerRadius: ThemeBackend.borderRadius
++                horizontalPadding: 0
++                accentColor: AssistantState.listening ? ThemeBackend.red : ThemeBackend.surface0
++                textColor: AssistantState.listening ? ThemeBackend.crust : ThemeBackend.text
++                bgOpacity: (ThemeBackend.glassActive && !AssistantState.listening) ? 0.0 : 1.0
++                action_highlight: AssistantState.listening
++                // First click listens until silence, a second one stops early
++                onClicked: AssistantState.send({ cmd: "listen" })
++            }
++            ClickButton {
++                buttonIcon: "󰒊"
++                implicitWidth: root.s(36)
++                implicitHeight: root.s(36)
++                cornerRadius: ThemeBackend.borderRadius
++                horizontalPadding: 0
++                accentColor: ThemeBackend.mauve
++                textColor: ThemeBackend.crust
++                onClicked: root.sendPrompt(input.text, input)
++            }
++        }
++    }
++
++    // The side panel puts each part on a quick-actions card (Floating.qml:1480 EmptyBlock); in the popup it's flat
++    component Card: Rectangle {
++        default property alias content: cardCol.data
++        readonly property real pad: root.side ? root.s(8) : 0
++        implicitHeight: cardCol.implicitHeight + 2 * pad
++        radius: Math.min(root.s(10), Math.min(width, height) / 2)
++        color: !root.side || cardGlass.active ? "transparent" : Qt.rgba(ThemeBackend.text.r, ThemeBackend.text.g, ThemeBackend.text.b, 0.05)
++        GlassFill {
++            id: cardGlass
++            allowed: root.side
++            anchors.fill: parent
++            radius: parent.radius
++            tintColor: ThemeBackend.surface0
++            tintAmount: 0.25
++        }
++        ColumnLayout {
++            id: cardCol
++            anchors.fill: parent
++            anchors.margins: parent.pad
++            spacing: root.s(root.side ? 8 : 10)
++        }
++    }
++
++    ColumnLayout {
++        id: col
++        anchors.fill: parent
++        spacing: root.s(root.side ? 6 : 10)
++
++        Card {
++            Layout.fillWidth: true
++            // Model, layout toggle and drop-down terminal
++            RowLayout {
++                Layout.fillWidth: true
++                spacing: root.s(8)
++                Dropdown {
++                    visible: AssistantState.models.length > 0
++                    Layout.fillWidth: root.side
++                    Layout.preferredWidth: root.side ? -1 : root.s(190)
++                    implicitHeight: root.s(28)
++                    fuzzySearch: true
++                    fontPixelSize: root.f(11)
++                    accentColor: ThemeBackend.mauve
++                    baseColor: ThemeBackend.surface0
++                    hoverColor: ThemeBackend.surface1
++                    dropdownColor: ThemeBackend.surface0
++                    borderColor: Qt.alpha(ThemeBackend.surface2, 0.6)
++                    cornerRadius: ThemeBackend.borderRadius
++                    // Dropdown's Texts auto-detect rich text; model names are remote data
++                    options: AssistantState.models.map(m => String(m.name).replace(/</g, "‹").replace(/>/g, "›"))
++                    currentIndex: AssistantState.models.findIndex(m => m.id === AssistantState.model)
++                    onSelected: (i, v) => AssistantState.send({ cmd: "set_model", model: AssistantState.models[i].id })
++                }
++                Item { visible: !root.side; Layout.fillWidth: true }
++                ClickButton {
++                    buttonText: root.side ? "" : "Side" // the narrow panel only has room for icons
++                    buttonIcon: root.side ? "󰖲" : "󰖯"
++                    iconFontSize: root.s(12)
++                    textFontSize: root.f(11)
++                    implicitHeight: root.s(28)
++                    cornerRadius: ThemeBackend.borderRadius
++                    onClicked: AssistantState.send({ cmd: "move", look: root.side ? "popup" : "side" })
++                }
++                ClickButton {
++                    buttonText: root.side ? "" : "Terminal"
++                    buttonIcon: "󰆍"
++                    iconFontSize: root.s(12)
++                    textFontSize: root.f(11)
++                    implicitHeight: root.s(28)
++                    cornerRadius: ThemeBackend.borderRadius
++                    onClicked: AssistantState.send({ cmd: "move", look: "dropdown" })
++                }
++            }
++        }
++
++        Loader { id: topInput; active: !root.side; visible: active; Layout.fillWidth: true; sourceComponent: inputRow }
++
++        Card {
++            // Explicit: a layout reports no size for children of a hidden parent, so this can't follow its contents
++            visible: AssistantState.selection !== "" || list.count > 0 || AssistantState.memories.length > 0
++                     || AssistantState.status !== "" || AssistantState.pendingConfirm !== null
++            Layout.fillWidth: true
++            Layout.fillHeight: root.side
++
++            Rectangle {
++                visible: AssistantState.selection !== ""
++                color: ThemeBackend.surface0
++                radius: ThemeBackend.borderRadius
++                border.width: 1
++                border.color: Qt.alpha(ThemeBackend.surface2, 0.6)
++                implicitWidth: chipRow.implicitWidth + root.s(20)
++                implicitHeight: chipRow.implicitHeight + root.s(10)
++                Layout.maximumWidth: parent.width
++                Row {
++                    id: chipRow
++                    anchors.centerIn: parent
++                    spacing: root.s(6)
++                    Text {
++                        anchors.verticalCenter: parent.verticalCenter
++                        text: "󰁦"
++                        color: ThemeBackend.mauve
++                        font.family: ThemeBackend.iconFont
++                        font.pixelSize: root.s(12)
++                    }
++                    Text {
++                        id: chipText
++                        anchors.verticalCenter: parent.verticalCenter
++                        textFormat: Text.PlainText
++                        width: Math.min(implicitWidth, col.width - root.s(60))
++                        elide: Text.ElideRight
++                        color: ThemeBackend.subtext0
++                        font.family: ThemeBackend.fontFamily
++                        font.pixelSize: root.f(11)
++                        text: {
++                            const t = AssistantState.selection.replace(/\s+/g, " ");
++                            return "Selected text · " + (t.length > 60 ? t.slice(0, 60) + "…" : t);
++                        }
++                    }
++                }
++            }
++
++            ListView {
++                id: list
++                visible: count > 0
++                Layout.fillWidth: true
++                Layout.fillHeight: root.side // shrinks to scroll when the side panel reaches its maximum height
++                Layout.preferredHeight: Math.min(contentHeight, root.maxListHeight)
++                clip: true
++                spacing: root.s(8)
++                model: AssistantState.messages
++                // Every message laid out: estimated heights shift while scrolling, and each shift snapped back to the end
++                cacheBuffer: 1 << 20
++                property bool follow: true // stick to the newest text unless you scrolled up to read
++                onContentHeightChanged: if (follow) positionViewAtEnd()
++                onMovementStarted: follow = false // mid-scroll a streamed line must not pull you back
++                onMovementEnded: follow = atYEnd
++                onCountChanged: { follow = true; positionViewAtEnd(); } // a new message shows the end
++                // New messages fade and rise in, at the drawer's content timing (Floating.qml:1852)
++                add: Transition {
++                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 250 }
++                    NumberAnimation { property: "scale"; from: 0.96; to: 1; duration: 250; easing.type: Easing.OutCubic }
++                }
++
++                delegate: Item {
++                    id: msg
++                    required property int index
++                    required property string role
++                    required property string text
++                    required property bool done
++                    required property string html
++                    readonly property bool isUser: role === "user"
++                    width: ListView.view.width
++                    implicitHeight: bubble.height
++
++                    Rectangle {
++                        id: bubble
++                        anchors.right: msg.isUser ? parent.right : undefined
++                        width: Math.round(msg.width * (msg.isUser ? 0.85 : 1))
++                        height: Math.max(body.implicitHeight, playBtn.visible ? playBtn.height : 0) + root.s(16)
++                        radius: ThemeBackend.borderRadius
++                        // Launcher.qml:1805 tint for the user's line, plain surface for answers
++                        color: msg.isUser ? Qt.tint(ThemeBackend.surface2, Qt.rgba(ThemeBackend.mauve.r, ThemeBackend.mauve.g, ThemeBackend.mauve.b, 0.2))
++                                          : (ThemeBackend.glassActive ? Qt.alpha(ThemeBackend.surface0, 0.5) : ThemeBackend.surface0)
++
++                        Text {
++                            id: body
++                            x: root.s(12)
++                            y: root.s(8)
++                            width: bubble.width - root.s(24) - (playBtn.visible ? playBtn.width + root.s(8) : 0)
++                            // html is the daemon's escaped subset (b/i/tt/pre/br/a, no images); streaming text stays plain
++                            text: msg.html !== "" ? msg.html : msg.text
++                            textFormat: msg.html !== "" ? Text.StyledText : Text.PlainText
++                            onLinkActivated: function(link) { if (/^https?:\/\//i.test(link)) Qt.openUrlExternally(link) }
++                            wrapMode: Text.Wrap
++                            color: ThemeBackend.text
++                            font.family: ThemeBackend.fontFamily
++                            font.pixelSize: root.f(12)
++                            font.weight: Font.Medium
++                        }
++                        ClickButton {
++                            id: playBtn
++                            visible: !msg.isUser && msg.done && msg.index === list.count - 1 && root.voiceMode !== "typing"
++                            anchors.right: parent.right
++                            anchors.top: parent.top
++                            anchors.margins: root.s(6)
++                            buttonIcon: "󰐊"
++                            horizontalPadding: root.s(6)
++                            implicitHeight: root.s(24)
++                            cornerRadius: ThemeBackend.borderRadius
++                            onClicked: AssistantState.send({ cmd: "speak_full" })
++                        }
++                    }
++                }
++            }
++
++            Text {
++                visible: AssistantState.memories.length > 0
++                textFormat: Text.PlainText
++                Layout.fillWidth: true
++                elide: Text.ElideRight
++                color: ThemeBackend.subtext0
++                font.family: ThemeBackend.fontFamily
++                font.pixelSize: root.f(11)
++                text: "Memories: " + AssistantState.memories.join(" · ")
++            }
++
++            Text {
++                visible: AssistantState.status !== ""
++                textFormat: Text.PlainText
++                Layout.fillWidth: true
++                wrapMode: Text.Wrap
++                maximumLineCount: 2
++                elide: Text.ElideRight
++                color: ThemeBackend.subtext0
++                font.family: ThemeBackend.fontFamily
++                font.pixelSize: root.f(11)
++                text: AssistantState.status
++            }
++
++            Rectangle {
++                visible: AssistantState.pendingConfirm !== null
++                Layout.fillWidth: true
++                implicitHeight: askRow.implicitHeight + root.s(20)
++                radius: ThemeBackend.borderRadius
++                color: ThemeBackend.glassActive ? Qt.alpha(ThemeBackend.surface0, 0.5) : ThemeBackend.surface0
++                RowLayout {
++                    id: askRow
++                    anchors.fill: parent
++                    anchors.margins: root.s(10)
++                    spacing: root.s(8)
++                    Text {
++                        Layout.fillWidth: true
++                        textFormat: Text.PlainText
++                        wrapMode: Text.Wrap
++                        color: ThemeBackend.text
++                        font.family: ThemeBackend.fontFamily
++                        font.pixelSize: root.f(13)
++                        text: AssistantState.pendingConfirm ? (AssistantState.pendingConfirm.title + (AssistantState.pendingConfirm.message ? "\n" + AssistantState.pendingConfirm.message : "")) : ""
++                    }
++                    ClickButton {
++                        buttonText: "Allow"
++                        textFontSize: root.f(12)
++                        cornerRadius: ThemeBackend.borderRadius
++                        accentColor: ThemeBackend.mauve
++                        textColor: ThemeBackend.crust
++                        onClicked: root.answer(true)
++                    }
++                    ClickButton {
++                        buttonText: "Deny"
++                        cornerRadius: ThemeBackend.borderRadius
++                        textFontSize: root.f(12)
++                        onClicked: root.answer(false)
++                    }
++                }
++            }
++        }
++
++        Card {
++            visible: root.side
++            Layout.fillWidth: true
++            Loader { id: bottomInput; active: root.side; visible: active; Layout.fillWidth: true; sourceComponent: inputRow }
++            Text {
++                Layout.fillWidth: true
++                wrapMode: Text.Wrap
++                color: ThemeBackend.overlay1
++                font.family: ThemeBackend.fontFamily
++                font.pixelSize: root.f(10)
++                text: root.hint
++            }
++        }
++
++        Text {
++            visible: !root.side
++            Layout.fillWidth: true
++            wrapMode: Text.Wrap
++            color: ThemeBackend.overlay1
++            font.family: ThemeBackend.fontFamily
++            font.pixelSize: root.f(11)
++            text: root.hint
++        }
++    }
++
++    function answer(allow) {
++        const c = AssistantState.pendingConfirm;
++        if (!c) return;
++        AssistantState.send({ cmd: "confirm", id: c.id, allow: allow });
++        AssistantState.pendingConfirm = null;
++    }
++}
+diff --git a/src/quickshell/assistant/AssistantPopup.qml b/src/quickshell/assistant/AssistantPopup.qml
+new file mode 100644
+index 0000000..e3ac556
+--- /dev/null
++++ b/src/quickshell/assistant/AssistantPopup.qml
+@@ -0,0 +1,64 @@
++import QtQuick
++import Quickshell
++import Quickshell.Wayland
++import "../"
++import "../reusables"
++
++PanelWindow {
++    id: win
++
++    readonly property bool shown: AssistantState.visible && AssistantState.look !== "side"
++    // Stays up for the close animation
++    visible: shown || card.animProgress > 0.001
++
++    WlrLayershell.namespace: "qs-assistant"
++    WlrLayershell.layer: WlrLayer.Overlay
++    WlrLayershell.keyboardFocus: win.shown ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
++    exclusionMode: ExclusionMode.Ignore
++    color: "transparent"
++
++    // Only the card takes clicks
++    mask: Region { item: card }
++
++    anchors { top: true; bottom: true; left: true; right: true }
++
++    onShownChanged: if (shown) chat.focusInput()
++
++    Rectangle {
++        id: card
++        anchors.centerIn: parent
++        width: Math.min(chat.s(640), win.width - chat.s(48)) // Spotlight-sized
++        height: chat.implicitHeight + chat.s(28)
++        // Launcher.qml:320
++        radius: ThemeBackend.borderRadius <= 16 ? ThemeBackend.borderRadius * 2 : Math.min(32, 32 - 16 * Math.exp(-(ThemeBackend.borderRadius - 16) / 12))
++        color: Qt.alpha(ThemeBackend.base, ThemeBackend.elementOpacity) // Launcher.qml:1317
++        clip: true
++
++        // Launcher.qml:1194: the centered launcher's open/close curve
++        property real animProgress: win.shown ? 1.0 : 0.0
++        Behavior on animProgress {
++            NumberAnimation {
++                duration: win.shown ? 420 : 200
++                easing.type: win.shown ? Easing.OutBack : Easing.InQuad
++                easing.overshoot: win.shown ? 1.28 : 1.0
++            }
++        }
++        opacity: Math.max(0.0, Math.min(1.0, animProgress * 1.5))
++        scale: 0.94 + 0.06 * Math.min(1.0, animProgress)
++
++        WallpaperBlur {
++            z: -1
++            anchors.fill: parent
++            radius: card.radius
++            standalone: true
++        }
++
++        AssistantChat {
++            id: chat
++            anchors.fill: parent
++            anchors.margins: chat.s(14)
++            maxListHeight: Math.round(win.height * 0.5)
++            onCloseRequested: { AssistantState.send({ cmd: "closed" }); AssistantState.visible = false; AssistantState.pendingConfirm = null; }
++        }
++    }
++}
+diff --git a/src/quickshell/assistant/AssistantSidePanel.qml b/src/quickshell/assistant/AssistantSidePanel.qml
+new file mode 100644
+index 0000000..9e730df
+--- /dev/null
++++ b/src/quickshell/assistant/AssistantSidePanel.qml
+@@ -0,0 +1,118 @@
++import QtQuick
++import Quickshell
++import Quickshell.Wayland
++import "../"
++import "../reusables"
++
++// Docked to the right screen edge the way serpantinum's side popouts are (SideMusicPopout.qml:285-370): flat on the
++// edge with fillets into it, rounded inside; content sits in quick-actions cards. Opens like the quick-actions drawer:
++// the surface grows out of the edge in both directions while the content fades in (Floating.qml:699-716, 1477).
++PanelWindow {
++    id: win
++
++    readonly property real sf: Scaler.baseScale
++    function s(val) { return Math.round(val * win.sf); }
++
++    readonly property bool shown: AssistantState.visible && AssistantState.look === "side"
++    // Stays up for the slide-out
++    visible: shown || box.progress > 0.001
++
++    readonly property real cornerRadius: s(16) // Floating.qml:670 containerRadius
++    readonly property real filletRadius: s(24) // Floating.qml:671 outerCornerRadius
++    readonly property real pad: s(6) // card radius 10 (Floating.qml:1481) + 6 = the container's 16
++    readonly property real panelWidth: s(360) + 2 * pad // the System tab's width (SystemUsage.qml baseW)
++
++    WlrLayershell.namespace: "qs-assistant-side"
++    WlrLayershell.layer: WlrLayer.Overlay
++    WlrLayershell.keyboardFocus: win.shown ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
++    exclusionMode: ExclusionMode.Ignore
++    color: "transparent"
++
++    // Only the panel takes clicks
++    mask: Region { item: box }
++
++    anchors { top: true; bottom: true; right: true }
++    implicitWidth: panelWidth
++
++    onShownChanged: if (shown) chat.focusInput()
++
++    Item {
++        id: box
++        anchors.right: parent.right
++        anchors.verticalCenter: parent.verticalCenter
++
++        // Floating.qml:703-706, both ways
++        property real progress: win.shown ? 1 : 0
++        Behavior on progress { NumberAnimation { duration: 400; easing.type: Easing.OutQuart } }
++
++        // Follows the conversation like the drawer follows its tab (Floating.qml:700); scrolls past the cap
++        property real fullHeight: Math.min(parent.height - 2 * win.filletRadius - win.s(96), win.s(720), chat.implicitHeight + 2 * win.pad)
++        // Only while open: the opening morph already animates it, and before the first show the window has no height
++        Behavior on fullHeight { enabled: box.progress > 0.99; NumberAnimation { duration: 400; easing.type: Easing.OutQuart } }
++        readonly property real startHeight: Math.min(fullHeight, win.s(96))
++
++        width: win.panelWidth * progress
++        height: startHeight + (fullHeight - startHeight) * progress
++        // The fillets only make sense once there is a panel for them to join to the edge
++        readonly property bool joined: width > win.filletRadius
++
++        AttachedSurface {
++            id: fillets
++            kind: "assistant-side"
++            visible: box.progress > 0.001 && box.width > 0
++            rects: [{ x: box.x + surface.x, y: box.y + surface.y, w: surface.width, h: surface.height, r: [win.cornerRadius, win.cornerRadius, win.cornerRadius, win.cornerRadius] }]
++            filletRadius: box.joined ? win.filletRadius : 0
++            edges: ["right"]
++        }
++
++        // Fillets above and below where the panel meets the edge (SideMusicPopout.qml:294-346, alignRight)
++        Repeater {
++            model: 2
++            ShaderEffect {
++                required property int index
++                visible: box.joined
++                x: box.width - win.filletRadius
++                y: index === 0 ? -win.filletRadius : box.height
++                width: win.filletRadius
++                height: win.filletRadius
++                property vector2d itemSize: Qt.vector2d(width, height)
++                property real cornerIndex: index === 0 ? 3.0 : 1.0
++                property color color: Qt.alpha(ThemeBackend.base, ThemeBackend.elementOpacity)
++                fragmentShader: "file://" + Caching.serpantinumDir + "/assets/shaders/ui/corner_cutout.frag.qsb"
++            }
++        }
++
++        Rectangle {
++            id: surface
++            anchors.fill: parent
++            radius: win.cornerRadius
++            topRightRadius: 0
++            bottomRightRadius: 0
++            color: Qt.alpha(ThemeBackend.base, ThemeBackend.elementOpacity)
++            clip: true
++
++            WallpaperBlur {
++                z: -1
++                anchors.fill: parent
++                rim: 0
++                topLeftRadius: parent.topLeftRadius
++                topRightRadius: parent.topRightRadius
++                bottomLeftRadius: parent.bottomLeftRadius
++                bottomRightRadius: parent.bottomRightRadius
++            }
++
++            // Full size while the surface grows, so it's revealed instead of squeezed
++            AssistantChat {
++                id: chat
++                anchors.right: parent.right
++                anchors.rightMargin: win.pad
++                anchors.verticalCenter: parent.verticalCenter
++                width: win.panelWidth - 2 * win.pad
++                height: box.fullHeight - 2 * win.pad
++                opacity: box.progress // Floating.qml:1477
++                side: true
++                onCloseRequested: { AssistantState.send({ cmd: "closed" }); AssistantState.visible = false; AssistantState.pendingConfirm = null; }
++            }
++        }
++    }
++}
+diff --git a/src/quickshell/assistant/AssistantState.qml b/src/quickshell/assistant/AssistantState.qml
+new file mode 100644
+index 0000000..c359fdc
+--- /dev/null
++++ b/src/quickshell/assistant/AssistantState.qml
+@@ -0,0 +1,119 @@
++pragma Singleton
++import QtQuick
++import Quickshell
++import Quickshell.Io
++
++// Client of hummin-assistant's socket: one JSON object per line each way.
++Scope {
++    id: root
++
++    property Socket sock: null
++    readonly property bool connected: sock !== null && sock.connected
++    property bool visible: false
++    property string look: "popup"
++    property bool busy: false
++    property bool mic: false
++    property bool listening: false
++    property bool speaking: false
++    property string model: ""
++    property var models: []          // [{id, name, images}]
++    property string selection: ""
++    property var memories: []
++    property string status: ""       // e.g. "Retrying (1/3): ..." while Hummin retries a failed request
++    property var pendingConfirm: null // {id, title, message} or null
++    property ListModel messages: ListModel {}
++
++    function send(obj) {
++        if (!root.connected) return;
++        sock.write(JSON.stringify(obj) + "\n");
++        sock.flush();
++    }
++
++    // html: the daemon's escaped StyledText rendering, "" while streaming
++    function append(role, text, done, html) {
++        messages.append({ role: role, text: text, done: done, html: html || "" });
++    }
++
++    function handle(m) {
++        const n = messages.count;
++        const last = n > 0 ? messages.get(n - 1) : null;
++        switch (m.ev) {
++        case "state":
++            for (const k of ["visible", "look", "busy", "mic", "listening", "speaking", "model", "models"])
++                if (k in m) root[k] = m[k];
++            if ("busy" in m && !m.busy) status = "";
++            break;
++        case "show":
++            if (m.look) look = m.look;
++            if (!busy && !m.keep) { messages.clear(); memories = []; selection = ""; }
++            pendingConfirm = null; // the daemon routes an unanswered confirm to a notification when closed
++            visible = true;
++            break;
++        case "hide":
++        case "capture": // hidden so the screenshot misses it; the next show brings it back
++            visible = false;
++            pendingConfirm = null;
++            break;
++        case "context": selection = m.selection || ""; break;
++        case "user":
++        case "transcript": append("user", m.text || "", true, m.html); break;
++        case "delta":
++            if (last && last.role === "assistant" && !last.done) messages.setProperty(n - 1, "text", last.text + m.text);
++            else append("assistant", m.text, false);
++            break;
++        case "done":
++            status = "";
++            if (last && last.role === "assistant" && !last.done) {
++                messages.setProperty(n - 1, "done", true);
++                if (m.html) messages.setProperty(n - 1, "html", m.html);
++            } else if (m.text) append("assistant", m.text, true, m.html);
++            break;
++        case "confirm": pendingConfirm = { id: m.id, title: m.title || "", message: m.message || "" }; break;
++        case "memories": memories = m.items || []; break;
++        case "error": status = ""; append("assistant", "⚠ " + m.text, true); break;
++        case "status": status = m.text || ""; break;
++        }
++    }
++
++    // A fresh Socket per attempt: after a failed connect (daemon not up yet, at login or mid-restart) Quickshell keeps
++    // the dead QLocalSocket and setConnected never connects again (quickshell v0.3.0 src/io/socket.cpp:75-84)
++    Component {
++        id: socketComponent
++        Socket {
++            id: socket
++            path: Quickshell.env("XDG_RUNTIME_DIR") + "/hummin-assistant.sock"
++            parser: SplitParser {
++                onRead: data => {
++                    try { root.handle(JSON.parse(data)); } catch (e) { console.warn("assistant: bad line", data, e); }
++                }
++            }
++            onConnectedChanged: {
++                if (socket !== root.sock) return; // a replaced socket going away
++                if (connected) { socket.write(JSON.stringify({ cmd: "hello" }) + "\n"); socket.flush(); } // root.connected lags this signal
++                else {
++                    root.busy = root.listening = root.mic = root.speaking = false;
++                    root.status = "";
++                    root.visible = false;
++                    root.pendingConfirm = null;
++                    retry.restart();
++                }
++            }
++            onError: if (socket === root.sock) retry.restart() // a failed connect reports only this
++        }
++    }
++
++    function reconnect() {
++        if (root.sock) root.sock.destroy();
++        root.sock = socketComponent.createObject(root);
++        root.sock.connected = true;
++    }
++
++    Component.onCompleted: reconnect()
++
++    // Retry while the daemon is down
++    Timer {
++        id: retry
++        interval: 2000
++        onTriggered: if (!root.connected) root.reconnect() // never tear down a live connection
++    }
++}
+diff --git a/src/quickshell/assistant/qmldir b/src/quickshell/assistant/qmldir
+new file mode 100644
+index 0000000..632bf5e
+--- /dev/null
++++ b/src/quickshell/assistant/qmldir
+@@ -0,0 +1,4 @@
++Assistant 1.0 Assistant.qml
++AssistantChat 1.0 AssistantChat.qml
++AssistantPopup 1.0 AssistantPopup.qml
++AssistantSidePanel 1.0 AssistantSidePanel.qml
+diff --git a/src/quickshell/qmldir b/src/quickshell/qmldir
+index 464bbcb..927b333 100644
+--- a/src/quickshell/qmldir
++++ b/src/quickshell/qmldir
+@@ -8,6 +8,8 @@ FloatingEdgeTrigger 1.0 quickactions/FloatingEdgeTrigger.qml
+ Clipboard 1.0 clipboard/Clipboard.qml
+ Dashboard 1.0 calendar/Dashboard.qml
+ Launcher 1.0 launcher/Launcher.qml
++Assistant 1.0 assistant/Assistant.qml
++singleton AssistantState 1.0 assistant/AssistantState.qml
+ ScreenshotOverlay 1.0 screenshot/ScreenshotOverlay.qml
+ WallpaperEngine 1.0 wallpaper/WallpaperEngine.qml
+ Idle 1.0 idle/Idle.qml

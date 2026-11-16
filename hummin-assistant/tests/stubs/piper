@@ -1,0 +1,4 @@
+#!/bin/sh
+# Drains stdin (text), prints fake PCM bytes
+cat >/dev/null
+printf PCMDATA

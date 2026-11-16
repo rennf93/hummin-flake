@@ -1,0 +1,4 @@
+#!/bin/sh
+# Records argv to STUB_ARGS (if set), then idles until killed
+[ -n "$STUB_ARGS" ] && printf '%s\n' "$@" > "$STUB_ARGS"
+exec sleep 30

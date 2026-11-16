@@ -1,0 +1,4 @@
+#!/bin/sh
+# STUB_MODE=fail -> exit 1; otherwise print STUB_OUT (summary)
+[ "$STUB_MODE" = fail ] && exit 1
+printf '%s' "$STUB_OUT"

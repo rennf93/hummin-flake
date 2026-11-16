@@ -1,0 +1,4 @@
+#!/bin/sh
+# STUB_WAKES="0.1 0.2" -> print "wake" after each delay in turn (seconds), then idle until killed
+for d in $STUB_WAKES; do sleep "$d"; echo wake; done
+exec sleep 30
