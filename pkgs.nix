@@ -19,11 +19,18 @@ let
       --set PYTHONPATH $out/lib/hummin-menubar --add-flags "-m hummin_menubar"
   '';
 
-  # CPU stays, deliberately: on this machine base.en warms up at ~160 ms on CPU vs ~400 ms
-  # via Vulkan (jfk.wav, 2026-11-17) — shader dispatch beats iGPU gains on short clips and
-  # small models; the code comment's "upgrade" note was wrong here. SDL only feeds
-  # whisper-stream, which the daemon never runs (it uses file-based whisper-cli) —
-  # withSDL = false removes the SDL3 → zenity → gtk4 chain (~470 MB of closure).
+  # Inference-only piper: the daemon calls the same `piper` CLI, so dropping the train/http/
+  # alignment extras removes the bundled PyTorch stack (torch + lightning + librosa +
+  # tensorboard ≈ 2.6 GB of closure, 2026-11-17). Verified: --output-raw streaming (the
+  # daemon's exact call) emits PCM fine without torch.
+  piper = pkgs.piper-tts.override { withTrain = false; withHTTP = false; withAlignment = false; };
+
+  # CPU stays, deliberately: base.en warms at ~2.0 s on CPU vs ~3.1 s via Vulkan on an 11 s
+  # clip (jfk.wav, 2026-11-17) — iGPU shader dispatch loses to a strong CPU on short clips
+  # and small models, so the old "upgrade: vulkan" idea is dead here. SDL only feeds
+  # whisper-stream; the daemon uses file-based whisper-cli, whose internal wav reader works
+  # without SDL (identical transcripts/speed verified) — withSDL = false drops the
+  # SDL3 → zenity → gtk4 chain (~530 MB of closure).
   whisper = pkgs.whisper-cpp.override { withSDL = false; };
 
   whisperModel = pkgs.fetchurl {
@@ -87,7 +94,7 @@ let
 
     makeWrapper ${pkgs.python3}/bin/python3 $out/bin/hummin-assistant \
       --set PYTHONPATH $out/lib/hummin-assistant --add-flags "-m hummin_assistant" \
-      --prefix PATH : ${pkgs.lib.makeBinPath [ whisper pkgs.pipewire pkgs.piper-tts pkgs.wl-clipboard pkgs.grim pkgs.libnotify pkgs.kitty ]} \
+      --prefix PATH : ${pkgs.lib.makeBinPath [ whisper piper pkgs.pipewire pkgs.wl-clipboard pkgs.grim pkgs.libnotify pkgs.kitty ]} \
       --set HUMMIN_ASSISTANT_WHISPER_MODEL ${whisperModel} \
       --set HUMMIN_ASSISTANT_VOICE ${voice}/en_US-lessac-medium.onnx \
       --set HUMMIN_ASSISTANT_WAKE $out/bin/hummin-wakeword
