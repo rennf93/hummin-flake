@@ -34,6 +34,9 @@ services.hummin.enable = true;
 If the host runs serpantinum (its overlay active), the UI is grafted onto **your** serpantinum
 build — the module's patch overlay is applied last, so it's the final word. The patches target
 upstream serpantinum; if they don't fit your version the build fails loudly, never half-installs.
+**Don't apply these patches twice**: if your config already adds the same three
+`serpantinum-hummin-*.patch` files to serpantinum, remove them there — this module does it,
+and a second application fails the build.
 
 ### Keybinding (Super+Space)
 
@@ -82,6 +85,10 @@ Bump like any flake: `nix flake update serpantinum hummin hummin-menubar`, and i
 contexts moved, adjust `patches/`. CI keeps this honest: builds on every push, runs the daemon
 test suite, and weekly applies the patch chain against the pinned serpantinum and against
 upstream master (advisory) so drift is caught the day it happens.
+
+One known cost: the `serpantinum` input (and its transitive inputs) sits in this flake's lock
+even on hosts that never run serpantinum — eval-only there, a few MB of source. Accepted for
+simplicity; pin a tag (`?ref=v0.1.0`) and it doesn't move under you.
 
 Troubleshooting: `journalctl --user -u hummin-assistant -u hummin-menubar`.
 

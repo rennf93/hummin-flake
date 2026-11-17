@@ -34,14 +34,18 @@
       # the module-managed settings work without serpantinum).
       testHost = name: extra: nixpkgs.lib.nixosSystem {
         inherit system;
-        modules = [ ({ ... }: {
-          networking.hostName = name;
-          fileSystems."/" = { device = "/dev/disk/by-label/none"; fsType = "ext4"; };
-          boot.loader.systemd-boot.enable = true;
-          boot.loader.efi.canTouchEfiVariables = true;
-          system.stateVersion = "26.05";
-          services.hummin.enable = true;
-        }) extra self.nixosModules.default ];
+        modules = [
+          (_: {
+            networking.hostName = name;
+            fileSystems."/" = { device = "/dev/disk/by-label/none"; fsType = "ext4"; };
+            boot.loader.systemd-boot.enable = true;
+            boot.loader.efi.canTouchEfiVariables = true;
+            system.stateVersion = "26.05";
+            services.hummin.enable = true;
+          })
+          extra
+          self.nixosModules.default
+        ];
       };
     in
     {

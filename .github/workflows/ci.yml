@@ -3,10 +3,33 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
   schedule:
     - cron: "0 6 * * 1"   # Mondays: catch serpantinum/hummin upstream drift early
 
 jobs:
+  hygiene:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # full history so gitleaks scans every commit
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-26.05
+      - name: gitleaks (tree + history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: statix
+        run: nix run nixpkgs#statix -- check .
+      - name: deadnix
+        run: nix run nixpkgs#deadnix -- .
+      - name: format (nixpkgs-fmt — serpantinum's formatter)
+        run: nix run nixpkgs#nixpkgs-fmt -- --check ./*.nix
+      - name: actionlint
+        run: nix run nixpkgs#actionlint -- -color
+
   build:
     # The gate: both eval hosts. eval-test proves the patch graft composes on a serpantinum
     # host; eval-test-generic proves the no-serpantinum path (tray/dropdown/wake word) does too.
@@ -21,8 +44,9 @@ jobs:
       - run: nix build .#nixosConfigurations.eval-test-generic.config.system.build.toplevel
 
   patch-drift:
-    # Fails the weekly run the day a serpantinum commit breaks the patch chain,
-    # long before it hits someone's flake update.
+    # Weekly, not per-push: this job only makes sense against upstream movement. Run manually
+    # with workflow_dispatch before bumping the serpantinum pin.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -33,16 +57,17 @@ jobs:
             '(builtins.fromJSON (builtins.readFile ./flake.lock)).nodes.serpantinum.locked.rev')
           git clone --quiet --filter=blob:none https://github.com/ilyamiro/serpantinum.git /tmp/serp
           git -C /tmp/serp checkout --quiet "$PIN"
-          git -C /tmp/serp apply patches/serpantinum-hummin-button.patch
-          git -C /tmp/serp apply patches/serpantinum-hummin-assistant.patch
-          git -C /tmp/serp apply patches/serpantinum-hummin-fleet.patch
+          # absolute paths: git -C <dir> apply resolves relative patch paths inside the clone
+          git -C /tmp/serp apply "$GITHUB_WORKSPACE/patches/serpantinum-hummin-button.patch"
+          git -C /tmp/serp apply "$GITHUB_WORKSPACE/patches/serpantinum-hummin-assistant.patch"
+          git -C /tmp/serp apply "$GITHUB_WORKSPACE/patches/serpantinum-hummin-fleet.patch"
       - name: apply chain against upstream master (advisory)
         run: |
           git clone --quiet https://github.com/ilyamiro/serpantinum.git /tmp/serp2
           git -C /tmp/serp2 checkout --quiet master
-          git -C /tmp/serp2 apply patches/serpantinum-hummin-button.patch &&
-          git -C /tmp/serp2 apply patches/serpantinum-hummin-assistant.patch &&
-          git -C /tmp/serp2 apply patches/serpantinum-hummin-fleet.patch &&
+          git -C /tmp/serp2 apply "$GITHUB_WORKSPACE/patches/serpantinum-hummin-button.patch" &&
+          git -C /tmp/serp2 apply "$GITHUB_WORKSPACE/patches/serpantinum-hummin-assistant.patch" &&
+          git -C /tmp/serp2 apply "$GITHUB_WORKSPACE/patches/serpantinum-hummin-fleet.patch" &&
           echo "chain also still applies on master" ||
           echo "::warning::patch chain no longer applies to serpantinum master — rebase before next bump"
 
@@ -51,9 +76,11 @@ jobs:
     timeout-minutes: 8
     strategy:
       matrix:
-        # 3.12 has a CPython asyncio regression this suite trips (teardown waits hang);
-        # 3.11/3.13/3.15 all pass. The Nix build runs on nixpkgs' 3.13, so 3.13 is the one that matters.
-        python-version: ["3.11", "3.13", "3.15"]
+        # 3.13 is the one that matters: nixpkgs' python3.13 runs the daemon in the real build.
+        # 3.15 guards the future. NOT 3.11: on this tree the suite hangs after
+        # test_screenshot_reshow_keeps_the_chat (teardown wait; job canceled at 8 min —
+        # ci run 43985118195, 2026-11-17), despite the parent repo's ci.yml claiming 3.11 passes.
+        python-version: ["3.13", "3.15"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

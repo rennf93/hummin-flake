@@ -32,7 +32,7 @@ in
     # (the author's CI applies them to current upstream weekly); when they don't fit the host's
     # serpantinum version the build fails loudly, never silently.
     nixpkgs.overlays = lib.mkAfter [
-      (final: prev: lib.optionalAttrs (prev ? serpantinum) {
+      (_final: prev: lib.optionalAttrs (prev ? serpantinum) {
         serpantinum = prev.serpantinum.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
             ./patches/serpantinum-hummin-button.patch
@@ -50,52 +50,54 @@ in
     ];
 
     # Same units as the author's machine; his nixos-config carries the full "why" comments.
-    systemd.user.services.hummin-menubar = {
-      description = "hummin menubar (LLM fleet tray control)";
-      partOf = [ "graphical-session.target" ];
-      after = [ "graphical-session.target" ];
-      wantedBy = [ "graphical-session.target" ];
-      # NixOS units get their own PATH, which hid servers.json's ssh, sudo and the systemctl its sudo rules name
-      enableDefaultPath = false;
-      serviceConfig = {
-        ExecStart = "${packages.hummin-menubar}/bin/hummin-menubar";
-        # It registers with the tray once, so wait for the StatusNotifierWatcher (any desktop's)
-        ExecStartPre = "${pkgs.bash}/bin/bash -c 'for i in {1..60}; do ${pkgs.systemd}/bin/busctl --user status org.kde.StatusNotifierWatcher >/dev/null 2>&1 && exit 0; sleep 1; done'";
-        Restart = "on-failure";
-        RestartSec = 2;
+    systemd.user.services = {
+      hummin-menubar = {
+        description = "hummin menubar (LLM fleet tray control)";
+        partOf = [ "graphical-session.target" ];
+        after = [ "graphical-session.target" ];
+        wantedBy = [ "graphical-session.target" ];
+        # NixOS units get their own PATH, which hid servers.json's ssh, sudo and the systemctl its sudo rules name
+        enableDefaultPath = false;
+        serviceConfig = {
+          ExecStart = "${packages.hummin-menubar}/bin/hummin-menubar";
+          # It registers with the tray once, so wait for the StatusNotifierWatcher (any desktop's)
+          ExecStartPre = "${pkgs.bash}/bin/bash -c 'for i in {1..60}; do ${pkgs.systemd}/bin/busctl --user status org.kde.StatusNotifierWatcher >/dev/null 2>&1 && exit 0; sleep 1; done'";
+          Restart = "on-failure";
+          RestartSec = 2;
+        };
       };
-    };
 
-    systemd.user.services.hummin-assistant = {
-      description = "hummin assistant (voice and keyboard front end)";
-      partOf = [ "graphical-session.target" ];
-      after = [ "graphical-session.target" ];
-      wantedBy = [ "graphical-session.target" ];
-      # Same as hummin-menubar: the daemon's PATH is the wrapper's plus the session's (hummin, hyprctl)
-      enableDefaultPath = false;
-      serviceConfig = {
-        ExecStart = "${assistantWrapper}";
-        WorkingDirectory = "%h";
-        EnvironmentFile = "-%h/.config/hummin/env";
-        Restart = "on-failure";
-        RestartSec = 2; # the 100 ms default hits the start limit (5 in 10 s) before the session is up
+      hummin-assistant = {
+        description = "hummin assistant (voice and keyboard front end)";
+        partOf = [ "graphical-session.target" ];
+        after = [ "graphical-session.target" ];
+        wantedBy = [ "graphical-session.target" ];
+        # Same as hummin-menubar: the daemon's PATH is the wrapper's plus the session's (hummin, hyprctl)
+        enableDefaultPath = false;
+        serviceConfig = {
+          ExecStart = "${assistantWrapper}";
+          WorkingDirectory = "%h";
+          EnvironmentFile = "-%h/.config/hummin/env";
+          Restart = "on-failure";
+          RestartSec = 2; # the 100 ms default hits the start limit (5 in 10 s) before the session is up
+        };
       };
-    };
 
-    # Seed the module-managed settings once, only where serpantinum's settings.json doesn't
-    # already exist (that file is the signal the wrapper keys on). User edits to the copy
-    # persist — it lives in the home, not the store.
-    systemd.user.services.hummin-settings = {
-      wantedBy = [ "graphical-session-pre.target" ];
-      before = [ "graphical-session-pre.target" ];
-      unitConfig.ConditionPathExists = "!%h/.config/serpantinum/settings.json";
-      serviceConfig.Type = "oneshot";
-      script = ''
-        mkdir -p "$HOME/.config/hummin"
-        ${pkgs.jq}/bin/jq '.' ${pkgs.writeText "hummin-settings-defaults.json" (builtins.toJSON {
-          look = "popup"; voice = "typing"; wakeWord = true; model = "openrouter/z-ai/glm-5.3-flash";
-        })} > "$HOME/.config/hummin/settings.json"
-      '';
+      # Seed the module-managed settings once, only where serpantinum's settings.json doesn't
+      # already exist (that file is the signal the wrapper keys on). User edits to the copy
+      # persist — it lives in the home, not the store.
+      hummin-settings = {
+        wantedBy = [ "graphical-session-pre.target" ];
+        before = [ "graphical-session-pre.target" ];
+        unitConfig.ConditionPathExists = "!%h/.config/serpantinum/settings.json";
+        serviceConfig.Type = "oneshot";
+        script = ''
+          mkdir -p "$HOME/.config/hummin"
+          ${pkgs.jq}/bin/jq '.' ${pkgs.writeText "hummin-settings-defaults.json" (builtins.toJSON {
+            look = "popup"; voice = "typing"; wakeWord = true; model = "openrouter/z-ai/glm-5.3-flash";
+          })} > "$HOME/.config/hummin/settings.json"
+        '';
+      };
     };
   };
 }

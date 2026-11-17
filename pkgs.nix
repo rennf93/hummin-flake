@@ -2,6 +2,7 @@
 # hummin-assistant/ tree (extracted to its own repo later, this becomes a flake input).
 { pkgs, humminPkg, humminMenubarSrc, daemonSrc }:
 let
+  inherit (pkgs) lib;
   # The repo's flake still names its wrapper after upstream's `pi`. Its bundled-extension seeder
   # copies read-only store files into ~/.hummin/agent/extensions and dies with EACCES on the next
   # update — make them writable before each start.
@@ -46,13 +47,9 @@ let
   melspec = pkgs.fetchurl { url = "${oww}/melspectrogram.onnx"; hash = "sha256-uisOD4t7h1NposicsTNg/1O6xDbyiVzO2fR5+mXrF28="; };
   embedding = pkgs.fetchurl { url = "${oww}/embedding_model.onnx"; hash = "sha256-cNFkKQwdCV0dTuFJvF4AVDJQpzFrWfMdBWz/e9MHXB8="; };
 
-  # Filter out Python's caches: a dirty worktree and a clean clone at the same commit must
-  # evaluate to the same system.
-  daemonSource = builtins.path {
-    path = daemonSrc;
-    name = "hummin-assistant-src";
-    filter = path: type: type != "directory" || baseNameOf path != "__pycache__";
-  };
+  # This flake is a git tree, so ./hummin-assistant arrives as tracked files only — untracked
+  # junk and gitignored __pycache__ are already excluded upstream of here.
+  daemonSource = daemonSrc;
   # trained by hummin-assistant/wakeword/train.sh (synthetic Piper voices; see hey_hummin.yml)
   wakeModel = daemonSource + "/wakeword/hey_hummin.onnx";
 
@@ -96,9 +93,16 @@ let
       --set HUMMIN_ASSISTANT_MELSPEC ${melspec} \
       --set HUMMIN_ASSISTANT_EMBEDDING ${embedding}
   '';
+  addMeta = description: pkg: pkg.overrideAttrs (old: {
+    meta = (old.meta or { }) // {
+      inherit description;
+      license = lib.licenses.mit;
+      platforms = lib.platforms.linux;
+    };
+  });
 in
 {
-  hummin = hummin-cli;
-  hummin-menubar = menubar;
-  hummin-assistant = assistant;
+  hummin = addMeta "Hummin assistant CLI (a maintained fork of Pi)" hummin-cli;
+  hummin-menubar = addMeta "Hummin tray menubar (LLM fleet control)" menubar;
+  hummin-assistant = addMeta "Hummin voice/keyboard assistant daemon (whisper.cpp, piper, openWakeWord)" assistant;
 }
