@@ -19,7 +19,13 @@ let
       --set PYTHONPATH $out/lib/hummin-menubar --add-flags "-m hummin_menubar"
   '';
 
-  # CPU only (base.en: ~1.7 s on a short clip). Upgrade: `whisper-cpp.override { vulkanSupport = true; }` is in cache.nixos.org
+  # CPU stays, deliberately: on this machine base.en warms up at ~160 ms on CPU vs ~400 ms
+  # via Vulkan (jfk.wav, 2026-11-17) — shader dispatch beats iGPU gains on short clips and
+  # small models; the code comment's "upgrade" note was wrong here. SDL only feeds
+  # whisper-stream, which the daemon never runs (it uses file-based whisper-cli) —
+  # withSDL = false removes the SDL3 → zenity → gtk4 chain (~470 MB of closure).
+  whisper = pkgs.whisper-cpp.override { withSDL = false; };
+
   whisperModel = pkgs.fetchurl {
     url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin";
     sha256 = "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002";
@@ -81,7 +87,7 @@ let
 
     makeWrapper ${pkgs.python3}/bin/python3 $out/bin/hummin-assistant \
       --set PYTHONPATH $out/lib/hummin-assistant --add-flags "-m hummin_assistant" \
-      --prefix PATH : ${pkgs.lib.makeBinPath (with pkgs; [ whisper-cpp pipewire piper-tts wl-clipboard grim libnotify kitty ])} \
+      --prefix PATH : ${pkgs.lib.makeBinPath [ whisper pkgs.pipewire pkgs.piper-tts pkgs.wl-clipboard pkgs.grim pkgs.libnotify pkgs.kitty ]} \
       --set HUMMIN_ASSISTANT_WHISPER_MODEL ${whisperModel} \
       --set HUMMIN_ASSISTANT_VOICE ${voice}/en_US-lessac-medium.onnx \
       --set HUMMIN_ASSISTANT_WAKE $out/bin/hummin-wakeword
