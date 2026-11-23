@@ -10,17 +10,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1794545200,
-        "narHash": "sha256-6sLSL06dPbpfGWAkfCp2LPxl0NJ+1LoEoZH9+9afkro=",
+        "lastModified": 1795279494,
+        "narHash": "sha256-ddUzaV/yqMwlAYp549EZlU0TD4KBjrcpWpWHWuOONf0=",
         "owner": "rennf93",
         "repo": "hummin",
-        "rev": "d5175998122b7c7bfe18c634f8849555b1608087",
+        "rev": "c81e99eae417780a6097ebdd0c02cc0545931c9c",
         "type": "github"
       },
       "original": {
         "owner": "rennf93",
         "repo": "hummin",
-        "rev": "d5175998122b7c7bfe18c634f8849555b1608087",
+        "rev": "c81e99eae417780a6097ebdd0c02cc0545931c9c",
         "type": "github"
       }
     },
