@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Bump hummin-menubar to 255636e (warm rows adopted when already running, `~` expanded in `warmKeyFile`).
+- Bump hummin-menubar to 9833a30 (warm rows adopted when already running, `~` expanded in `warmKeyFile`, tray registration keeps retrying, warm/cold label only on running rows).
 - Bump serpantinum to v2.5.2 (cf41260); the three patches apply cleanly and the patched build succeeds.
 
 ## 0.1.0 — 2026-11-17
