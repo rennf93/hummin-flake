@@ -14,7 +14,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.nixpkgs-darwin-x64.follows = "nixpkgs";
     };
-    hummin-menubar = { url = "github:rennf93/hummin-menubar-linux/1d123b0498476df4150f437d41874790a6f812b5"; flake = false; };
+    hummin-menubar = { url = "github:rennf93/hummin-menubar-linux/961e93d131079da994507a89277885ba9095bfcd"; flake = false; };
   };
 
   outputs = { self, nixpkgs, serpantinum, hummin, hummin-menubar }:
