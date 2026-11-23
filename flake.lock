@@ -27,17 +27,17 @@
     "hummin-menubar": {
       "flake": false,
       "locked": {
-        "lastModified": 1795399689,
-        "narHash": "sha256-qIeWHIBDAh+IQxTWYasy+UHuXnO+kUtQ899DLc6JVx4=",
+        "lastModified": 1795400661,
+        "narHash": "sha256-tcVV7nFSZdhV6DHGkV20VbByrNJgI010SprEli0IYg4=",
         "owner": "rennf93",
         "repo": "hummin-menubar-linux",
-        "rev": "961e93d131079da994507a89277885ba9095bfcd",
+        "rev": "255636e45b25cc22fda7cc960675a85172d9c2f6",
         "type": "github"
       },
       "original": {
         "owner": "rennf93",
         "repo": "hummin-menubar-linux",
-        "rev": "961e93d131079da994507a89277885ba9095bfcd",
+        "rev": "255636e45b25cc22fda7cc960675a85172d9c2f6",
         "type": "github"
       }
     },
@@ -74,16 +74,16 @@
         "ski": "ski"
       },
       "locked": {
-        "lastModified": 1794321224,
-        "narHash": "sha256-OdWV0AsWic0cqifNtB1KvrgsoN81au/kY+ainQxpvGI=",
+        "lastModified": 1795210403,
+        "narHash": "sha256-gKIjBVvCJtF9lBOyzmagGuqruVpvLb6JiUyceO47o68=",
         "owner": "ilyamiro",
         "repo": "serpantinum",
-        "rev": "83add3acb7613a96ea5ee909f5114b41b2661b60",
+        "rev": "cf4126078328b94583494d46648f812fb501cc02",
         "type": "github"
       },
       "original": {
         "owner": "ilyamiro",
-        "ref": "v2.5.1",
+        "ref": "v2.5.2",
         "repo": "serpantinum",
         "type": "github"
       }

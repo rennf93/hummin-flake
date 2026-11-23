@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Bump hummin-menubar to 255636e (warm rows adopted when already running, `~` expanded in `warmKeyFile`).
+- Bump serpantinum to v2.5.2 (cf41260); the three patches apply cleanly and the patched build succeeds.
+
 ## 0.1.0 — 2026-11-17
 
 First release: Hummin as one flake for any NixOS machine.
