@@ -1,5 +1,5 @@
 diff --git a/src/quickshell/guide/HumminTab.qml b/src/quickshell/guide/HumminTab.qml
-index c65b5f0..35c2204 100644
+index c65b5f0..9dd97b9 100644
 --- a/src/quickshell/guide/HumminTab.qml
 +++ b/src/quickshell/guide/HumminTab.qml
 @@ -17,37 +17,43 @@ GuideTab {
@@ -58,10 +58,11 @@ index c65b5f0..35c2204 100644
 +    // "  starting..." after it (hummin_menubar/app.py render()); entries without a port (murmur link) have no ":port"
      function parse(label) {
 -        let m = /^(.*?)\s+:(\d+)(?:\s+·\S+)?\s+([●◐○])/.exec(label || "");
-+        let m = /^(.*?)(?:\s+:(\d+))?(?:\s+·\S+)?\s+([●◐○])/.exec(label || "");
-         if (!m) return { name: label || "", port: "", state: "down" };
+-        if (!m) return { name: label || "", port: "", state: "down" };
 -        return { name: m[1], port: m[2], state: m[3] === "●" ? "up" : (m[3] === "◐" ? "busy" : "down") };
-+        return { name: m[1], port: m[2] || "", state: m[3] === "●" ? "up" : (m[3] === "◐" ? "busy" : "down") };
++        let m = /^(.*?)(?:\s+:(\d+))?(?:\s+·\S+)?\s+([●◐○])(?:\s+(warming up|warm|cold))?\s*$/.exec(label || "");
++        if (!m) return { name: label || "", port: "", state: "down", warm: "" };
++        return { name: m[1], port: m[2] || "", state: m[3] === "●" ? "up" : (m[3] === "◐" ? "busy" : "down"), warm: m[4] || "" };
      }
  
      function stateLabel(state) {
@@ -232,7 +233,7 @@ index c65b5f0..35c2204 100644
          iconTextColor: humminTabRoot.stateColor(row.info.state)
          title: row.info.name
 -        description: ":" + row.info.port + "  ·  " + humminTabRoot.stateLabel(row.info.state)
-+        description: (row.info.port ? ":" + row.info.port + "  ·  " : "") + humminTabRoot.stateLabel(row.info.state)
++        description: (row.info.port ? ":" + row.info.port + "  ·  " : "") + humminTabRoot.stateLabel(row.info.state) + (row.info.warm ? "  ·  " + row.info.warm : "")
  
          QsMenuOpener {
              id: actionsMenu
