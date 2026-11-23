@@ -27,17 +27,17 @@
     "hummin-menubar": {
       "flake": false,
       "locked": {
-        "lastModified": 1795408111,
-        "narHash": "sha256-vS8H2EFmr+xOpbo2xe1+4b3SxU3dgSLW3bLE/4P6TBc=",
+        "lastModified": 1795408319,
+        "narHash": "sha256-7pC/OmAfSRRC95UP/jWMl1TZCeUTsLYByhEHMLnYldA=",
         "owner": "rennf93",
         "repo": "hummin-menubar-linux",
-        "rev": "d0bce76f57dc3f6c28153d1f05d48fe0fb0922f9",
+        "rev": "3a2042a0712da762adb3e13079942dbe90bb6423",
         "type": "github"
       },
       "original": {
         "owner": "rennf93",
         "repo": "hummin-menubar-linux",
-        "rev": "d0bce76f57dc3f6c28153d1f05d48fe0fb0922f9",
+        "rev": "3a2042a0712da762adb3e13079942dbe90bb6423",
         "type": "github"
       }
     },

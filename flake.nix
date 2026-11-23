@@ -2,7 +2,7 @@
 # menubar and the hummin CLI — plus, when the host runs serpantinum, its native shell UI
 # (bar button, popup/side-panel chat, settings page) grafted onto the host's serpantinum.
 # Pins mirror the author's nixos-config flake.lock so releases build what the author runs
-# (nixpkgs ac588ef / hummin d517599 / hummin-menubar d0bce76 / serpantinum v2.5.2).
+# (nixpkgs ac588ef / hummin d517599 / hummin-menubar 3a2042a / serpantinum v2.5.2).
 {
   description = "Hummin — Siri-like assistant for NixOS (native UI on serpantinum)";
 
@@ -14,7 +14,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.nixpkgs-darwin-x64.follows = "nixpkgs";
     };
-    hummin-menubar = { url = "github:rennf93/hummin-menubar-linux/d0bce76f57dc3f6c28153d1f05d48fe0fb0922f9"; flake = false; };
+    hummin-menubar = { url = "github:rennf93/hummin-menubar-linux/3a2042a0712da762adb3e13079942dbe90bb6423"; flake = false; };
   };
 
   outputs = { self, nixpkgs, serpantinum, hummin, hummin-menubar }:
